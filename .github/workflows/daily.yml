@@ -1,0 +1,56 @@
+name: Daily crypto brief
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 03:00 UTC = 08:00 Pakistan time. GitHub can start it a few minutes late.
+  workflow_dispatch: {}    # lets you press "Run workflow" manually in the Actions tab
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install requirements
+        run: pip install -r requirements.txt
+
+      - name: Run the agents and build the brief
+        run: python daily_brief.py BTC ETH SOL
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AUTO_OPEN: "0"
+
+      - name: Prepare the web page
+        run: |
+          mkdir -p site
+          cp reports/latest.html site/index.html
+          cp reports/brief_*.html site/ || true
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
